@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تأثير الجسيمات والقلوب الملونة - ساره وولاء</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #070b14;
+      overflow: hidden;
+      height: 100vh;
+      user-select: none;
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    }
+    .top-header {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      pointer-events: none;
+      padding: 8px 22px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      backdrop-filter: blur(6px);
+      color: #e0f2fe;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-shadow: 0 0 12px rgba(59, 130, 246, 0.75);
+      white-space: nowrap;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-header">من المهندس خالد</header>
+  <canvas id="scene"></canvas>
+
+  <script>
+    const canvas = document.getElementById("scene");
+    const ctx = canvas.getContext("2d");
+
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    // الأسماء تتناوب مع كل ضغطة: ساره ثم ولاء
+    const NAMES = ["ساره", "ولاء"];
+    let nameIndex = 0;
+
+    function getNextName() {
+      const currentName = NAMES[nameIndex];
+      nameIndex = (nameIndex + 1) % NAMES.length;
+      return currentName;
+    }
+
+    // لوحة ألوان متنوعة بحيث تعطي كل ضغطة لوناً جديداً للقلب والاسم
+    const HEART_PALETTES = [
+      { shades: ["#3b82f6", "#60a5fa", "#93c5fd", "#2563eb"], glow: "#3b82f6", text: "#e0f2fe" }, // أزرق
+      { shades: ["#ec4899", "#f472b6", "#fbcfe8", "#db2777"], glow: "#ec4899", text: "#fce7f3" }, // وردي
+      { shades: ["#ef4444", "#f87171", "#fecaca", "#dc2626"], glow: "#ef4444", text: "#fee2e2" }, // أحمر
+      { shades: ["#a855f7", "#c084fc", "#e9d5ff", "#9333ea"], glow: "#a855f7", text: "#f3e8ff" }, // بنفسجي
+      { shades: ["#f59e0b", "#fbbf24", "#fde68a", "#d97706"], glow: "#f59e0b", text: "#fef3c7" }, // ذهبي
+      { shades: ["#06b6d4", "#22d3ee", "#a5f3fc", "#0891b2"], glow: "#06b6d4", text: "#cffafe" }, // سماوي
+      { shades: ["#10b981", "#34d399", "#a7f3d0", "#059669"], glow: "#10b981", text: "#d1fae5" }, // زمردي
+      { shades: ["#f97316", "#fb923c", "#fed7aa", "#ea580c"], glow: "#f97316", text: "#ffedd5" }  // مرجاني
+    ];
+    let paletteIndex = 0;
+
+    function getNextPalette() {
+      const palette = HEART_PALETTES[paletteIndex];
+      paletteIndex = (paletteIndex + 1) % HEART_PALETTES.length;
+      return palette;
+    }
+
+    const ALL_FLOAT_COLORS = HEART_PALETTES.flatMap((p) => p.shades);
+
+    window.addEventListener("resize", () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    const floatParticles = [];
+    const burstParticles = [];
+    const floatingLabels = [];
+    const FLOAT_COUNT = 140;
+
+    class Particle {
+      constructor(x, y, mode = "float", angle = 0, palette = null, scaleFactor = 1) {
+        this.x = x;
+        this.y = y;
+        this.mode = mode;
+
+        if (mode === "float") {
+          this.color = ALL_FLOAT_COLORS[Math.floor(Math.random() * ALL_FLOAT_COLORS.length)];
+          this.vx = (Math.random() - 0.5) * 0.6;
+          this.vy = -0.2 - Math.random() * 0.6;
+          this.radius = 1.5 + Math.random() * 2.5;
+          this.life = 0;
+          this.maxLife = 200 + Math.random() * 200;
+        } else {
+          const shades = palette ? palette.shades : ALL_FLOAT_COLORS;
+          this.color = shades[Math.floor(Math.random() * shades.length)];
+
+          // حساب الإحداثي النهائي على شكل قلب كبير وواضح، ثم توجيه الجسيم نحوه بسلاسة
+          const hx = 16 * Math.pow(Math.sin(angle), 3);
+          const hy = -(
+            13 * Math.cos(angle) -
+            5 * Math.cos(2 * angle) -
+            2 * Math.cos(3 * angle) -
+            Math.cos(4 * angle)
+          );
+
+          const targetX = x + hx * scaleFactor;
+          const targetY = y + hy * scaleFactor;
+
+          const travelFrames = 26;
+          this.vx = (targetX - x) / travelFrames;
+          this.vy = (targetY - y) / travelFrames;
+          this.settleFrame = travelFrames;
+
+          this.radius = 2.6 + Math.random() * 2.2;
+          this.life = 0;
+          this.maxLife = 105 + Math.random() * 35;
+        }
+      }
+
+      update() {
+        if (this.mode === "float") {
+          this.x += this.vx;
+          this.y += this.vy;
+          this.life++;
+
+          if (this.y < -10 || this.life >= this.maxLife) {
+            this.x = Math.random() * width;
+            this.y = height + 10;
+            this.life = 0;
+          }
+        } else {
+          if (this.life < this.settleFrame) {
+            this.x += this.vx;
+            this.y += this.vy;
+          } else {
+            // نبضة وتوسع خفيف جداً بعد تكوّن القلب
+            this.x += this.vx * 0.08;
+            this.y += this.vy * 0.08;
+          }
+          this.life++;
+        }
+      }
+
+      draw() {
+        const alpha = Math.max(0, 1 - this.life / this.maxLife);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.mode === "burst" ? 8 : 0;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class HeartLabel {
+      constructor(x, y, text, palette) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.palette = palette;
+        this.life = 0;
+        this.maxLife = 110;
+      }
+
+      update() {
+        this.life++;
+      }
+
+      draw() {
+        const progress = this.life / this.maxLife;
+        const alpha = Math.max(0, 1 - Math.pow(progress, 1.4));
+        const scale = 0.92 + Math.min(progress * 0.25, 0.12);
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 30px 'Segoe UI', Tahoma, Arial, sans-serif";
+        ctx.shadowColor = this.palette.glow;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = this.palette.text;
+        ctx.fillText(this.text, 0, 0);
+        ctx.restore();
+      }
+    }
+
+    for (let i = 0; i < FLOAT_COUNT; i++) {
+      const p = new Particle(
+        Math.random() * width,
+        Math.random() * height,
+        "float"
+      );
+      p.life = Math.random() * p.maxLife;
+      floatParticles.push(p);
+    }
+
+    function spawnHeartBurst(x, y) {
+      const count = 220;
+      const chosenPalette = getNextPalette();
+      // حجم كبير ومناسب للشاشة مع الحفاظ على عدم خروجه عن أطراف الشاشة
+      const heartScale = Math.min(13.5, Math.max(8.5, Math.min(width, height) / 58));
+
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count;
+        burstParticles.push(new Particle(x, y, "burst", angle, chosenPalette, heartScale));
+      }
+
+      const chosenName = getNextName();
+      floatingLabels.push(new HeartLabel(x, y - 6, chosenName, chosenPalette));
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      spawnHeartBurst(e.clientX, e.clientY);
+    });
+
+    // عرض مبدئي في منتصف الشاشة
+    spawnHeartBurst(width / 2, height / 2);
+
+    function animate() {
+      ctx.fillStyle = "rgba(7, 11, 20, 0.22)";
+      ctx.fillRect(0, 0, width, height);
+
+      for (let i = 0; i < floatParticles.length; i++) {
+        floatParticles[i].update();
+        floatParticles[i].draw();
+      }
+
+      for (let i = burstParticles.length - 1; i >= 0; i--) {
+        burstParticles[i].update();
+        burstParticles[i].draw();
+        if (burstParticles[i].life >= burstParticles[i].maxLife) {
+          burstParticles[i] = burstParticles[burstParticles.length - 1];
+          burstParticles.pop();
+        }
+      }
+
+      for (let i = floatingLabels.length - 1; i >= 0; i--) {
+        floatingLabels[i].update();
+        floatingLabels[i].draw();
+        if (floatingLabels[i].life >= floatingLabels[i].maxLife) {
+          floatingLabels.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
